@@ -1,4 +1,8 @@
-// Firebase configuration
+// src/firebase.ts
+import { initializeApp } from "firebase/app";
+import { getAuth, signOut } from "firebase/auth";
+
+// Configuração do Firebase com variáveis de ambiente
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -8,4 +12,19 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID
 };
 
+// Inicializa o Firebase
+const app = initializeApp(firebaseConfig);
+
+// Inicializa o Auth
+const auth = getAuth(app);
+
+// Função de logout
+export function logout() {
+  return signOut(auth);
+}
+
+// (Opcional) Exporte o auth e app se precisar em outros arquivos
+export { auth, app };
+
+// Exportação padrão da configuração, caso precise
 export default firebaseConfig;
