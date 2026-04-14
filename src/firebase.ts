@@ -32,5 +32,25 @@ export async function signInWithGoogle() {
 
 // Login com Email/Senha
 export async function loginWithEmail(email: string, password: string) {
-  return signInWithEmailAndPassword
+  return signInWithEmailAndPassword(auth, email, password);
 }
+
+// Logout
+export function logout() {
+  return signOut(auth);
+}
+
+// Handler de erro para Firestore
+export function handleFirestoreError(error: any) {
+  console.error("Firestore error:", error);
+  return error?.message || "Ocorreu um erro ao acessar o Firestore.";
+}
+
+// Tipo OperationType
+export type OperationType = "create" | "read" | "update" | "delete";
+
+// Exporta auth e db para uso em outros arquivos
+export { auth, db };
+
+// Exporte default, se necessário
+export default firebaseConfig;
