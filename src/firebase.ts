@@ -30,4 +30,3 @@ export async function signInWithGoogle() {
 // Login com Email/Senha
 export async function loginWithEmail(email: string, password: string) {
   return signInWithEmailAnd
-
