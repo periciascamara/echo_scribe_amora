@@ -12,7 +12,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID
 };
 
-// Inicializa o Firebase
+// Inicializa o app Firebase
 const app = initializeApp(firebaseConfig);
 
 // Inicializa o Auth
@@ -23,8 +23,6 @@ export function logout() {
   return signOut(auth);
 }
 
-// (Opcional) Exporte o auth e app se precisar em outros arquivos
-export { auth, app };
+// Outras exports necessárias? Adicione aqui.
 
-// Exportação padrão da configuração, caso precise
 export default firebaseConfig;
