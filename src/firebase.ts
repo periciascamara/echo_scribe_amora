@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signOut, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Configuração do Firebase
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -16,30 +15,28 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Google login
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   return signInWithPopup(auth, provider);
 }
 
-// Login com email e senha
 export async function loginWithEmail(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password);
 }
 
-// Logout
 export function logout() {
   return signOut(auth);
 }
 
-// Handler de erro do Firestore
 export function handleFirestoreError(error: any) {
   console.error("Firestore error:", error);
   return error?.message || "Ocorreu um erro ao acessar o Firestore.";
 }
 
-// Exporte outras funções/constantes se necessário (Exemplo de OperationType:)
+// ⭐️ Adicione isto:
 export type OperationType = "create" | "read" | "update" | "delete";
-export { auth, db };
+// ou (se preferir):
+// export enum OperationType { CREATE = "create", READ = "read", UPDATE = "update", DELETE = "delete" }
 
+export { auth, db };
 export default firebaseConfig;
