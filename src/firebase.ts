@@ -16,13 +16,13 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Login com Google
+// Google login
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   return signInWithPopup(auth, provider);
 }
 
-// **Login com email e senha**
+// Login com email e senha
 export async function loginWithEmail(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password);
 }
@@ -32,7 +32,14 @@ export function logout() {
   return signOut(auth);
 }
 
+// Handler de erro do Firestore
+export function handleFirestoreError(error: any) {
+  console.error("Firestore error:", error);
+  return error?.message || "Ocorreu um erro ao acessar o Firestore.";
+}
+
+// Exporte outras funções/constantes se necessário (Exemplo de OperationType:)
+export type OperationType = "create" | "read" | "update" | "delete";
 export { auth, db };
 
-// Exporte outros métodos, como handleFirestoreError/OperationType, se precisar.
 export default firebaseConfig;
