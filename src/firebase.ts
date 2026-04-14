@@ -1,8 +1,8 @@
-// src/firebase.ts
 import { initializeApp } from "firebase/app";
-import { getAuth, signOut } from "firebase/auth";
+import { getAuth, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// Configuração do Firebase com variáveis de ambiente
+// Configuração do Firebase
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -12,17 +12,24 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID
 };
 
-// Inicializa o app Firebase
 const app = initializeApp(firebaseConfig);
-
-// Inicializa o Auth
 const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Função para login com Google
+export async function signInWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  return signInWithPopup(auth, provider);
+}
 
 // Função de logout
 export function logout() {
   return signOut(auth);
 }
 
-// Outras exports necessárias? Adicione aqui.
+// (Exemplo, exporte também o auth e db caso seu app utilize!)
+export { auth, db };
+
+// Exporte outros métodos se necessário, como loginWithEmail, handleFirestoreError, OperationType, etc.
 
 export default firebaseConfig;
