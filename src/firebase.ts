@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, signOut, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Configuração do Firebase
@@ -16,20 +16,23 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Função para login com Google
+// Login com Google
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   return signInWithPopup(auth, provider);
 }
 
-// Função de logout
+// **Login com email e senha**
+export async function loginWithEmail(email: string, password: string) {
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+// Logout
 export function logout() {
   return signOut(auth);
 }
 
-// (Exemplo, exporte também o auth e db caso seu app utilize!)
 export { auth, db };
 
-// Exporte outros métodos se necessário, como loginWithEmail, handleFirestoreError, OperationType, etc.
-
+// Exporte outros métodos, como handleFirestoreError/OperationType, se precisar.
 export default firebaseConfig;
