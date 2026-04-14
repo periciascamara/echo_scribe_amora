@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "lastVisit": { "type": "string" },
+        "status": { "type": "string" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["name", "ownerUid"]
+    },
+    "InterviewScript": {
+      "title": "Interview Script",
+      "description": "Medical interview script/roadmap",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "isFavorite": { "type": "boolean" },
+        "status": { "type": "string" },
+        "instructions": { "type": "string" },
+        "checklist": { "type": "array" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["name", "ownerUid"]
+    },
+    "DocTemplate": {
+      "title": "Document Template",
+      "description": "Template for document generation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "sections": { "type": "array", "items": { "type": "string" } },
+        "instructions": { "type": "string" },
+        "latexTemplate": { "type": "string" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["name", "ownerUid"]
+    },
+    "SessionHistory": {
+      "title": "Session History",
+      "description": "History of medical sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "summary": { "type": "string" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["patientId", "ownerUid"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patient records"
+    },
+    "/scripts/{scriptId}": {
+      "schema": "InterviewScript",
+      "description": "Interview scripts"
+    },
+    "/templates/{templateId}": {
+      "schema": "DocTemplate",
+      "description": "Document templates"
+    },
+    "/history/{historyId}": {
+      "schema": "SessionHistory",
+      "description": "Session history records"
+    }
+  }
+}

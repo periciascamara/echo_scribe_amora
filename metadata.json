@@ -1,0 +1,7 @@
+{
+  "name": "ECHO scribe",
+  "description": "Plataforma avançada de documentação clínica assistida por IA para profissionais de saúde.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
