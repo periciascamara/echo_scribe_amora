@@ -1,4 +1,3 @@
-// src/firebase.ts
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -9,7 +8,6 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Configuração do Firebase (usando variáveis de ambiente)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -19,7 +17,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID,
 };
 
-// Inicializa Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -31,4 +28,6 @@ export async function signInWithGoogle() {
 }
 
 // Login com Email/Senha
-export
+export async function loginWithEmail(email: string, password: string) {
+  return signInWithEmailAnd
+
