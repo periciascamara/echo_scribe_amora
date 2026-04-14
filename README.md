@@ -1,20 +1,59 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ECHO scribe - Assistente Médico Inteligente
 
-# Run and deploy your AI Studio app
+ECHO scribe é uma aplicação full-stack projetada para auxiliar médicos na transcrição e organização de consultas em tempo real, utilizando a API do Gemini para processamento de linguagem natural e Firebase para persistência de dados.
 
-This contains everything you need to run your app locally.
+## 🚀 Funcionalidades
 
-View your app in AI Studio: https://ai.studio/apps/99c7df70-22dc-4ce0-b79f-45e2bd35aa3e
+- **Transcrição em Tempo Real**: Captura áudio da consulta e transcreve instantaneamente.
+- **Geração de Documentos (SOAP/LaTeX)**: Cria resumos estruturados e documentos prontos para impressão ou exportação.
+- **Gestão de Pacientes**: Histórico completo de consultas e modelos de pacientes.
+- **Roteiros Personalizados**: Crie checklists específicos para cada especialidade médica.
+- **Dashboard Administrativo**: Visão geral de uso e métricas da plataforma.
 
-## Run Locally
+## 🛠️ Tecnologias
 
-**Prerequisites:**  Node.js
+- **Frontend**: React 19, Vite, Tailwind CSS, Motion.
+- **Backend**: Express (para desenvolvimento local/proxy), Firebase (Auth & Firestore).
+- **IA**: Google Gemini API (@google/genai).
+- **Exportação**: jsPDF, Suporte nativo a LaTeX.
 
+## 📦 Configuração para Deploy (Vercel/GitHub)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 1. Variáveis de Ambiente
+
+Para rodar a aplicação em produção (Vercel), configure as seguintes variáveis de ambiente:
+
+| Variável | Descrição |
+| --- | --- |
+| `VITE_FIREBASE_API_KEY` | Chave de API do Firebase |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Domínio de autenticação do Firebase |
+| `VITE_FIREBASE_PROJECT_ID` | ID do projeto Firebase |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Bucket de storage do Firebase |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | ID do remetente de mensagens |
+| `VITE_FIREBASE_APP_ID` | ID da aplicação Firebase |
+| `VITE_FIREBASE_FIRESTORE_DATABASE_ID` | ID do banco de dados Firestore (opcional se for '(default)') |
+| `GEMINI_API_KEY` | Chave de API do Google Gemini |
+
+### 2. Deploy na Vercel
+
+1. Conecte seu repositório GitHub à Vercel.
+2. Adicione as variáveis de ambiente listadas acima.
+3. O comando de build deve ser `npm run build`.
+4. O diretório de saída deve ser `dist`.
+
+## 🧪 Contas de Teste
+
+Para testar a aplicação rapidamente, utilize as seguintes credenciais:
+
+- **Admin**: `admin@teste.com` / `123456`
+- **Usuário**: `usuario@teste.com` / `123456`
+
+## 🔒 Segurança
+
+- **Chaves de API**: Nunca commite arquivos `.env` ou `firebase-applet-config.json` para repositórios públicos.
+- **Vercel**: Utilize o painel da Vercel para configurar as variáveis de ambiente de forma segura.
+- **Firebase Rules**: Certifique-se de que suas `firestore.rules` estão configuradas corretamente para restringir o acesso apenas a usuários autenticados.
+
+## 📄 Licença
+
+Este projeto está sob a licença Apache-2.0.

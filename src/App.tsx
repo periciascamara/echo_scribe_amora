@@ -49,7 +49,8 @@ import {
   X,
   Eye,
   Upload,
-  Clipboard
+  Clipboard,
+  Save
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -143,6 +144,7 @@ type HistoryItem = {
   status: string;
   transcriptions: TranscriptionPart[];
   caseSummary: string;
+  summary?: string;
   scriptInstructions: string;
   createdAt?: any;
 }
@@ -329,7 +331,7 @@ const DEFAULT_SCRIPT = {
 
 // --- Components ---
 
-  const Sidebar = ({ currentView, setView, user, role }: { currentView: View, setView: (v: View) => void, user: FirebaseUser | null, role: string | null }) => {
+const Sidebar = ({ currentView, setView, user, role }: { currentView: View, setView: (v: View) => void, user: FirebaseUser | null, role: string | null }) => {
   const navItems = [
     { id: 'patient-models', label: 'Meus Pacientes', icon: Users },
     { id: 'scripts', label: 'Roteiros', icon: FileText },
@@ -992,8 +994,8 @@ const AuthPage = ({ setView }: { setView: (v: View) => void }) => {
           <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <p className="text-[10px] font-bold text-blue-600 uppercase mb-2">Contas de Teste:</p>
             <div className="space-y-1 text-[10px] text-blue-700">
-              <p><strong>Admin:</strong> admin@teste.com / 123</p>
-              <p><strong>Usuário:</strong> usuario@teste.com / 123</p>
+              <p><strong>Admin:</strong> admin@teste.com / 123456</p>
+              <p><strong>Usuário:</strong> usuario@teste.com / 123456</p>
             </div>
           </div>
         </div>
@@ -1126,7 +1128,9 @@ const HistoryView = ({
   setPatientName, 
   setCaseSummary, 
   setTranscriptions,
-  setScriptInstructions
+  setScriptInstructions,
+  setSummary,
+  setCurrentHistoryId
 }: { 
   history: HistoryItem[], 
   setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>,
@@ -1134,7 +1138,9 @@ const HistoryView = ({
   setPatientName: (n: string) => void,
   setCaseSummary: (s: string) => void,
   setTranscriptions: (t: TranscriptionPart[]) => void,
-  setScriptInstructions: (s: string) => void
+  setScriptInstructions: (s: string) => void,
+  setSummary: (s: string) => void,
+  setCurrentHistoryId: (id: string | null) => void
 }) => {
   const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta sessão?')) {
@@ -1151,7 +1157,9 @@ const HistoryView = ({
     setCaseSummary(item.caseSummary);
     setTranscriptions(item.transcriptions);
     setScriptInstructions(item.scriptInstructions);
-    setView('session-prep');
+    setSummary(item.summary || '');
+    setCurrentHistoryId(item.id);
+    setView('transcription-validation');
   };
 
   const handleSendToContext = (item: HistoryItem) => {
@@ -2234,7 +2242,8 @@ const LiveSessionView = ({
   scripts,
   setHistory,
   caseSummary,
-  summary
+  summary,
+  setCurrentHistoryId
 }: { 
   setView: (v: View) => void, 
   transcriptions: TranscriptionPart[], 
@@ -2248,7 +2257,8 @@ const LiveSessionView = ({
   scripts: Script[],
   setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>,
   caseSummary: string,
-  summary: string
+  summary: string,
+  setCurrentHistoryId: (id: string | null) => void
 }) => {
   const [authorized, setAuthorized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -2429,7 +2439,7 @@ const LiveSessionView = ({
     }
   };
 
-  const handleFinalize = async () => {
+  const handleFinalize = async (targetView: View = 'history') => {
     if (isRecording) {
       setIsRecording(false);
       setIsPaused(false);
@@ -2452,17 +2462,21 @@ const LiveSessionView = ({
             status: 'Concluído',
             transcriptions: [...transcriptions],
             caseSummary: caseSummary,
+            summary: summary,
             scriptInstructions: scriptInstructions,
             ownerUid: auth.currentUser.uid,
             createdAt: serverTimestamp()
           };
-          await addDoc(collection(db, 'history'), newHistoryItem);
+          const docRef = await addDoc(collection(db, 'history'), newHistoryItem);
+          if (typeof setCurrentHistoryId === 'function') {
+            setCurrentHistoryId(docRef.id);
+          }
         } catch (err) {
           handleFirestoreError(err, OperationType.CREATE, 'history');
         }
       }
     }
-    setView('transcription-validation');
+    setView(targetView);
   };
 
   return (
@@ -2510,7 +2524,7 @@ const LiveSessionView = ({
             >
               Cancelar
             </button>
-            <button onClick={handleFinalize} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Finalizar</button>
+            <button onClick={() => handleFinalize('history')} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Finalizar</button>
           </div>
         </div>
         
@@ -2573,7 +2587,7 @@ const LiveSessionView = ({
                       {isPaused ? "Retomar" : "Pausar"}
                     </button>
                     <button 
-                      onClick={handleFinalize}
+                      onClick={() => handleFinalize('history')}
                       className="px-4 py-2 bg-red-600 text-white rounded-lg flex items-center gap-2 text-sm font-bold hover:bg-red-700 transition-all"
                     >
                       <X className="w-4 h-4" /> Finalizar
@@ -2636,7 +2650,7 @@ const LiveSessionView = ({
             <button 
               onClick={() => {
                 setConfirmed(true);
-                handleFinalize();
+                handleFinalize('transcription-validation');
               }}
               disabled={!summary}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2723,7 +2737,8 @@ const TranscriptionValidationView = ({
   confirmed,
   setConfirmed,
   summary,
-  setSummary
+  setSummary,
+  currentHistoryId
 }: { 
   setView: (v: View) => void, 
   transcriptions: TranscriptionPart[], 
@@ -2733,11 +2748,29 @@ const TranscriptionValidationView = ({
   confirmed: boolean,
   setConfirmed: (v: boolean) => void,
   summary: string,
-  setSummary: (v: string) => void
+  setSummary: (v: string) => void,
+  currentHistoryId: string | null
 }) => {
   const [activeTab, setActiveTab] = useState<'transcription' | 'context' | 'summary'>('summary');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [customSummaryPrompt, setCustomSummaryPrompt] = useState<string>('');
+
+  const handleSaveSummary = async () => {
+    if (!currentHistoryId) return;
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'history', currentHistoryId), {
+        summary: summary,
+        transcriptions: transcriptions // Save any edits to transcription parts too if needed
+      });
+      alert('Resumo salvo com sucesso!');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `history/${currentHistoryId}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const generateSummary = async () => {
     setIsGeneratingSummary(true);
@@ -2868,6 +2901,14 @@ ${content.replace(/&/g, '\\&').replace(/%/g, '\\%').replace(/\$/g, '\\$').replac
             </button>
             <button onClick={handleCopy} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-sm font-semibold">
               <Copy className="w-4 h-4 text-emerald-500" /> Copiar Texto
+            </button>
+            <button 
+              onClick={handleSaveSummary} 
+              disabled={isSaving || !currentHistoryId}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-sm font-semibold text-blue-600 disabled:opacity-50"
+            >
+              {isSaving ? <div className="size-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+              Salvar Alterações
             </button>
           </div>
           <div className="mt-6 pt-6 border-t border-slate-100">
@@ -3070,9 +3111,12 @@ ${content.replace(/&/g, '\\&').replace(/%/g, '\\%').replace(/\$/g, '\\$').replac
                   <p className="text-sm font-bold text-slate-500">Analisando transcrição e contexto...</p>
                 </div>
               ) : (
-                <div className="p-6 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                  {summary || "Clique em regerar para processar o resumo."}
-                </div>
+                <textarea 
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  placeholder="Clique em regerar para processar o resumo ou escreva aqui..."
+                  className="w-full p-6 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed min-h-[300px] focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                />
               )}
             </div>
           )}
@@ -3793,6 +3837,7 @@ export default function App() {
   const [transcriptions, setTranscriptions] = useState<TranscriptionPart[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [summary, setSummary] = useState<string>('');
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
 
   // Auth Listener
   useEffect(() => {
@@ -3909,11 +3954,11 @@ export default function App() {
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       setAllUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'users'));
 
     const unsubAllHistory = onSnapshot(collection(db, 'history'), (snap) => {
       setAllHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'history'));
 
     return () => {
       unsubUsers();
@@ -3932,7 +3977,7 @@ export default function App() {
     );
   }
 
-  const renderContent = () => {
+  const RenderContent = () => {
     switch (view) {
       case 'landing': return <LandingPage setView={setView} />;
       case 'auth': return <AuthPage setView={setView} />;
@@ -3946,6 +3991,8 @@ export default function App() {
           setCaseSummary={setCaseSummary}
           setTranscriptions={setTranscriptions}
           setScriptInstructions={setScriptInstructions}
+          setSummary={setSummary}
+          setCurrentHistoryId={setCurrentHistoryId}
         />
       );
       case 'scripts': return (
@@ -3988,6 +4035,7 @@ export default function App() {
           setHistory={setHistory}
           caseSummary={caseSummary}
           summary={summary}
+          setCurrentHistoryId={setCurrentHistoryId}
         />
       );
       case 'transcription-validation': return (
@@ -4001,6 +4049,7 @@ export default function App() {
           setConfirmed={setConfirmed}
           summary={summary}
           setSummary={setSummary}
+          currentHistoryId={currentHistoryId}
         />
       );
       case 'doc-viewer': return (
@@ -4024,7 +4073,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       {isPublic ? (
-        renderContent()
+        <RenderContent />
       ) : (
         <div className="flex">
           <Sidebar currentView={view} setView={setView} user={user} role={userRole} />
@@ -4041,7 +4090,7 @@ export default function App() {
               view === 'doc-viewer' ? 'Visualizador de Documento' : ''
             } />
             <main className="flex-1 overflow-y-auto">
-              {renderContent()}
+              <RenderContent />
             </main>
           </div>
         </div>
