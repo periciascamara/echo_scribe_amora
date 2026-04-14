@@ -1,1 +1,14 @@
-{\n  "buildCommand": "YOUR_BUILD_COMMAND",\n  "installCommand": "YOUR_INSTALL_COMMAND",\n  "startCommand": "YOUR_START_COMMAND",\n  "env": {\n    "YOUR_ENV_VARIABLE": "YOUR_ENV_VALUE"\n  }\n}
+{
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "startCommand": "npm start",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
