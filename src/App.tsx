@@ -76,7 +76,9 @@ import {
   loginWithEmail,
   logout, 
   handleFirestoreError, 
-  OperationType 
+  OperationType,
+  isFirebaseConfigured,
+  missingFirebaseEnvNames
 } from './firebase';
 import { 
   onAuthStateChanged, 
@@ -4102,7 +4104,51 @@ const PatientModelsView = ({
 
 // --- Main App ---
 
-export default function App() {
+type AppErrorBoundaryState = {
+  hasError: boolean;
+  message: string | null;
+};
+
+class AppErrorBoundary extends React.Component<React.PropsWithChildren, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = {
+    hasError: false,
+    message: null
+  };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error.message
+    };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[AppErrorBoundary] Runtime crash:', error);
+    console.error('[AppErrorBoundary] Component stack:', errorInfo.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+          <div className="max-w-xl w-full bg-white border border-red-200 rounded-xl p-6 shadow-sm">
+            <h1 className="text-lg font-bold text-red-700">Erro ao carregar a aplicação</h1>
+            <p className="text-sm text-slate-600 mt-2">
+              Ocorreu um erro crítico em runtime. Verifique o console do navegador para detalhes.
+            </p>
+            {this.state.message && (
+              <pre className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-xs overflow-x-auto">{this.state.message}</pre>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function AppContent() {
   const [view, setView] = useState<View>('landing');
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -4192,6 +4238,14 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setIsAuthReady(true);
+      setUser(null);
+      setUserRole(null);
+      setView((prev) => (prev === 'landing' ? prev : 'landing'));
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
@@ -4220,6 +4274,7 @@ export default function App() {
 
   // Firestore Listeners
   useEffect(() => {
+    if (!isFirebaseConfigured) return;
     if (!user || !isAuthReady) return;
 
     const bootstrapData = async () => {
@@ -4297,6 +4352,7 @@ export default function App() {
 
   // Admin Global Listeners
   useEffect(() => {
+    if (!isFirebaseConfigured) return;
     if (!user || userRole !== 'admin') {
       setAllUsers([]);
       setAllHistory([]);
@@ -4316,6 +4372,23 @@ export default function App() {
       unsubAllHistory();
     };
   }, [user, userRole]);
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      console.error('[GlobalError] Unhandled runtime error:', event.error || event.message);
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('[GlobalError] Unhandled promise rejection:', event.reason);
+    };
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
 
   if (!isAuthReady) {
     return (
@@ -4433,6 +4506,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {!isFirebaseConfigured && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 text-xs text-amber-800 font-medium">
+          Firebase não configurado no ambiente. Defina as variáveis: {missingFirebaseEnvNames.join(', ')}.
+        </div>
+      )}
       {isPublic ? (
         renderContent()
       ) : (
@@ -4457,5 +4535,13 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }
