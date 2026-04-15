@@ -50,7 +50,9 @@ import {
   Eye,
   Upload,
   Clipboard,
-  Save
+  Save,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -1990,7 +1992,13 @@ const SessionPrepView = ({
   setScriptInstructions,
   setChecklistItems,
   scriptInstructions,
-  patients
+  patients,
+  devices,
+  selectedDeviceId,
+  setSelectedDeviceId,
+  deviceError,
+  onRefreshDevices,
+  onRequestPermission
 }: { 
   setView: (v: View) => void,
   patientName: string,
@@ -2001,13 +2009,106 @@ const SessionPrepView = ({
   setScriptInstructions: (v: string) => void,
   setChecklistItems: (v: { label: string, done: boolean }[]) => void,
   scriptInstructions: string,
-  patients: PatientModel[]
+  patients: PatientModel[],
+  devices: MediaDeviceInfo[],
+  selectedDeviceId: string,
+  setSelectedDeviceId: (v: string) => void,
+  deviceError: string | null,
+  onRefreshDevices: () => void,
+  onRequestPermission: () => void
 }) => {
   const [contextType, setContextType] = useState<'text' | 'file'>('text');
   const [fileName, setFileName] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedScriptId, setSelectedScriptId] = useState<string>('');
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [isTestingMic, setIsTestingMic] = useState(false);
+  const [permissionState, setPermissionState] = useState<PermissionState | 'unknown'>('unknown');
+  const testCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const testStreamRef = React.useRef<MediaStream | null>(null);
+  const testAnimRef = React.useRef<number | null>(null);
+
+  const checkPermission = async () => {
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const result = await navigator.permissions.query({ name: 'microphone' as any });
+        setPermissionState(result.state);
+        result.onchange = () => {
+          setPermissionState(result.state);
+          if (result.state === 'granted') onRefreshDevices();
+        };
+      }
+    } catch (e) {
+      console.warn("Permissions API not supported", e);
+    }
+  };
+
+  React.useEffect(() => {
+    checkPermission();
+  }, []);
+
+  const stopTestMic = () => {
+    setIsTestingMic(false);
+    if (testStreamRef.current) {
+      testStreamRef.current.getTracks().forEach(t => t.stop());
+      testStreamRef.current = null;
+    }
+    if (testAnimRef.current) {
+      cancelAnimationFrame(testAnimRef.current);
+      testAnimRef.current = null;
+    }
+  };
+
+  const startTestMic = async () => {
+    try {
+      setIsTestingMic(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true 
+      });
+      testStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const draw = () => {
+        if (!testCanvasRef.current) return;
+        const canvas = testCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          barHeight = dataArray[i] / 2;
+          ctx.fillStyle = `rgb(59, 130, 246)`; // blue-500
+          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+
+        testAnimRef.current = requestAnimationFrame(draw);
+      };
+
+      draw();
+    } catch (err) {
+      console.error("Error testing mic:", err);
+      setIsTestingMic(false);
+    }
+  };
+
+  React.useEffect(() => {
+    return () => stopTestMic();
+  }, []);
 
   const handlePatientSelect = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -2152,8 +2253,137 @@ const SessionPrepView = ({
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <Mic className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-bold">Teste de Microfone</h2>
+              </div>
+              <button 
+                onClick={onRefreshDevices}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                title="Atualizar lista de dispositivos"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {deviceError || permissionState === 'denied' ? (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-lg space-y-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-red-800">Acesso ao Microfone Bloqueado</p>
+                      <p className="text-xs text-red-700 leading-relaxed">
+                        {deviceError || "O navegador bloqueou o acesso ao microfone. O ECHO scribe precisa dele para realizar a transcrição."}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/50 p-3 rounded-md border border-red-200 space-y-2">
+                    <p className="text-[11px] font-bold text-red-900 uppercase tracking-wider">Como resolver:</p>
+                    <ol className="text-[11px] text-red-800 space-y-1.5 list-decimal ml-4">
+                      <li>Clique no <b>ícone de Cadeado</b> na barra de endereços do navegador.</li>
+                      <li>Certifique-se de que <b>"Microfone"</b> está como <b>"Permitir"</b>.</li>
+                      <li>Se o problema persistir, tente <b>abrir o app em uma nova aba</b> usando o ícone no canto superior direito do preview.</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={onRequestPermission}
+                      className="w-full py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all shadow-sm"
+                    >
+                      Tentar Liberar Agora
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="py-2 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
+                      >
+                        Recarregar
+                      </button>
+                      <button 
+                        onClick={() => window.open(window.location.href, '_blank')}
+                        className="py-2 bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold rounded-lg hover:bg-blue-100 transition-all flex items-center justify-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Nova Aba
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : devices.length === 0 ? (
+                <div className="p-6 bg-blue-50 border border-blue-100 rounded-lg text-center space-y-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                    <Mic className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-blue-900">Configurar Microfone</p>
+                    <p className="text-xs text-blue-700">Clique no botão abaixo para permitir o acesso ao áudio e iniciar o teste.</p>
+                  </div>
+                  <button 
+                    onClick={onRequestPermission}
+                    className="px-6 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-200"
+                  >
+                    Ativar Microfone
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Dispositivo de Entrada</label>
+                    <select 
+                      value={selectedDeviceId}
+                      onChange={(e) => setSelectedDeviceId(e.target.value)}
+                      className="w-full rounded-lg border-slate-200 bg-slate-50 text-sm p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      {devices.map(device => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Microfone ${device.deviceId.slice(0, 5)}...`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <div className="h-12 bg-slate-900 rounded-lg overflow-hidden relative">
+                      <canvas 
+                        ref={testCanvasRef}
+                        className="w-full h-full"
+                        width={400}
+                        height={48}
+                      />
+                      {!isTestingMic && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px]">
+                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Clique para testar</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={isTestingMic ? stopTestMic : startTestMic}
+                      className={cn(
+                        "w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2",
+                        isTestingMic 
+                          ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" 
+                          : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+                      )}
+                    >
+                      {isTestingMic ? (
+                        <><Pause className="w-3 h-3" /> Parar Teste</>
+                      ) : (
+                        <><PlayCircle className="w-3 h-3" /> Iniciar Teste de Voz</>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2">
               <Clipboard className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-bold">Contexto Prévio</h2>
@@ -2243,7 +2473,11 @@ const LiveSessionView = ({
   setHistory,
   caseSummary,
   summary,
-  setCurrentHistoryId
+  setCurrentHistoryId,
+  devices,
+  selectedDeviceId,
+  setSelectedDeviceId,
+  deviceError
 }: { 
   setView: (v: View) => void, 
   transcriptions: TranscriptionPart[], 
@@ -2258,16 +2492,21 @@ const LiveSessionView = ({
   setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>,
   caseSummary: string,
   summary: string,
-  setCurrentHistoryId: (id: string | null) => void
+  setCurrentHistoryId: (id: string | null) => void,
+  devices: MediaDeviceInfo[],
+  selectedDeviceId: string,
+  setSelectedDeviceId: (v: string) => void,
+  deviceError: string | null
 }) => {
   const [authorized, setAuthorized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [transcriptionReceived, setTranscriptionReceived] = useState(false);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  const [deviceError, setDeviceError] = useState<string | null>(null);
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   
   const serviceRef = React.useRef<GeminiLiveService | null>(null);
   const analyserRef = React.useRef<AnalyserNode | null>(null);
@@ -2291,44 +2530,6 @@ const LiveSessionView = ({
   };
 
   React.useEffect(() => {
-    const getDevices = async () => {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setDeviceError("Seu navegador não suporta gravação de áudio ou você não está em um ambiente seguro (HTTPS).");
-          return;
-        }
-
-        // Try to get permission first
-        try {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch (permErr: any) {
-          if (permErr.name === 'NotFoundError' || permErr.name === 'DevicesNotFoundError') {
-            setDeviceError("Nenhum microfone foi encontrado. Por favor, conecte um dispositivo de áudio.");
-          } else if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
-            setDeviceError("Permissão de microfone negada. Por favor, habilite o acesso nas configurações do navegador.");
-          } else {
-            setDeviceError(`Erro ao acessar microfone: ${permErr.message}`);
-          }
-          return;
-        }
-
-        const allDevices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
-        setDevices(audioInputs);
-        
-        if (audioInputs.length > 0) {
-          setSelectedDeviceId(audioInputs[0].deviceId);
-          setDeviceError(null);
-        } else {
-          setDeviceError("Nenhum microfone detectado. Verifique a conexão do seu hardware.");
-        }
-      } catch (err: any) {
-        console.error("Error accessing media devices:", err);
-        setDeviceError("Erro inesperado ao configurar dispositivos de áudio.");
-      }
-    };
-    getDevices();
-
     return () => {
       if (serviceRef.current) {
         serviceRef.current.stop();
@@ -2387,6 +2588,8 @@ const LiveSessionView = ({
     if (isRecording) {
       setIsRecording(false);
       setIsPaused(false);
+      setTranscriptionReceived(false);
+      setRecordingStartTime(null);
       setConnectionStatus('disconnected');
       setAudioLevel(0);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -2397,14 +2600,31 @@ const LiveSessionView = ({
     } else {
       setIsRecording(true);
       setIsPaused(false);
+      setTranscriptionReceived(false);
+      setRecordingStartTime(Date.now());
       setConnectionStatus('connecting');
+      setLastErrorMessage(null);
       setTranscriptions([]); 
       try {
         const apiKey = process.env.GEMINI_API_KEY || '';
-        const service = new GeminiLiveService(apiKey, (part) => {
-          setTranscriptions(prev => [...prev, part]);
-          setConnectionStatus('connected');
-        });
+        if (!apiKey) {
+          throw new Error("Chave da API Gemini não encontrada. Verifique as configurações do ambiente.");
+        }
+
+        const service = new GeminiLiveService(
+          apiKey, 
+          (part) => {
+            setTranscriptions(prev => [...prev, part]);
+            setTranscriptionReceived(true);
+            setConnectionStatus('connected');
+          },
+          (err) => {
+            console.error("Gemini Service Error:", err);
+            setLastErrorMessage(err?.message || "Erro na conexão com a API Gemini.");
+            setConnectionStatus('error');
+            setIsRecording(false);
+          }
+        );
         serviceRef.current = service;
         await service.start(selectedDeviceId);
         
@@ -2422,10 +2642,11 @@ const LiveSessionView = ({
         }
         
         setConnectionStatus('connected');
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
         setIsRecording(false);
         setConnectionStatus('error');
+        setLastErrorMessage(err?.message || "Não foi possível iniciar o serviço de transcrição.");
         serviceRef.current = null;
       }
     }
@@ -2443,6 +2664,8 @@ const LiveSessionView = ({
     if (isRecording) {
       setIsRecording(false);
       setIsPaused(false);
+      setTranscriptionReceived(false);
+      setRecordingStartTime(null);
       setConnectionStatus('disconnected');
       setAudioLevel(0);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -2524,7 +2747,7 @@ const LiveSessionView = ({
             >
               Cancelar
             </button>
-            <button onClick={() => handleFinalize('history')} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Finalizar</button>
+            <button onClick={() => setShowFinalizeModal(true)} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Finalizar</button>
           </div>
         </div>
         
@@ -2544,6 +2767,26 @@ const LiveSessionView = ({
               </div>
             </div>
           )}
+          {connectionStatus === 'error' && lastErrorMessage && (
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-lg flex items-start gap-3 text-amber-700">
+              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-bold text-sm">Erro na Transcrição</p>
+                <p className="text-xs opacity-90">{lastErrorMessage}</p>
+                {lastErrorMessage.includes("Acesso ao microfone negado") && (
+                  <div className="mt-2 p-2 bg-white/50 rounded border border-amber-200 text-[10px]">
+                    <p className="font-bold mb-1">Como resolver:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Clique no ícone de cadeado na barra de endereços e permita o microfone.</li>
+                      <li>Verifique se o microfone não está sendo usado por outro aplicativo.</li>
+                      <li>Tente abrir o aplicativo em uma <strong>Nova Aba</strong> usando o botão no topo da tela.</li>
+                    </ul>
+                  </div>
+                )}
+                <p className="text-[10px] mt-1 opacity-75 italic">Dica: Verifique sua conexão de internet ou tente novamente em alguns instantes.</p>
+              </div>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <div>
               <p className="text-lg font-bold">Fluxo de Áudio de Alta Fidelidade</p>
@@ -2554,22 +2797,38 @@ const LiveSessionView = ({
             </div>
             <div className="flex items-center gap-3">
               {!isRecording && (
-                <select 
-                  value={selectedDeviceId}
-                  onChange={(e) => setSelectedDeviceId(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-slate-50 focus:ring-2 focus:ring-blue-600 outline-none max-w-[150px]"
-                >
-                  {devices.map(device => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Microfone ${device.deviceId.slice(0, 5)}`}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select 
+                    value={selectedDeviceId}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-slate-50 focus:ring-2 focus:ring-blue-600 outline-none max-w-[150px]"
+                  >
+                    {devices.map(device => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Microfone ${device.deviceId.slice(0, 5)}`}
+                      </option>
+                    ))}
+                  </select>
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
+                    title="Recarregar dispositivos"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
               )}
               <div className="flex items-center gap-2">
                 {!isRecording ? (
                   <button 
-                    onClick={toggleRecording}
+                    onClick={() => {
+                      if (!authorized) {
+                        setLastErrorMessage("Por favor, confirme a autorização do paciente antes de iniciar a gravação.");
+                        setConnectionStatus('error');
+                        return;
+                      }
+                      toggleRecording();
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 text-sm font-bold hover:bg-blue-700 transition-all"
                   >
                     <Play className="w-4 h-4 fill-current" /> Iniciar
@@ -2587,7 +2846,7 @@ const LiveSessionView = ({
                       {isPaused ? "Retomar" : "Pausar"}
                     </button>
                     <button 
-                      onClick={() => handleFinalize('history')}
+                      onClick={() => setShowFinalizeModal(true)}
                       className="px-4 py-2 bg-red-600 text-white rounded-lg flex items-center gap-2 text-sm font-bold hover:bg-red-700 transition-all"
                     >
                       <X className="w-4 h-4" /> Finalizar
@@ -2636,28 +2895,19 @@ const LiveSessionView = ({
               </p>
             ))}
             {isRecording && (
-              <div className="flex items-center gap-2 text-slate-400 italic animate-pulse">
-                <Sparkles className="w-3 h-3" />
-                <span>IA processando áudio...</span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-slate-400 italic animate-pulse">
+                  <Sparkles className="w-3 h-3" />
+                  <span>{transcriptions.length > 0 ? "IA transcrevendo..." : "IA processando áudio (aguardando fala)..."}</span>
+                </div>
+                {!transcriptionReceived && recordingStartTime && (Date.now() - recordingStartTime > 10000) && (
+                  <div className="p-2 bg-red-50 border border-red-100 rounded text-[10px] text-red-600 flex items-center gap-2">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>Nenhuma fala detectada ainda. Verifique se o microfone correto está selecionado e se você está falando próximo a ele.</span>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <p className="text-xs text-slate-500 italic">
-              Ao clicar no botão abaixo, você confirma que a transcrição foi revisada e aceita por ambas as partes (médico e paciente).
-            </p>
-            <button 
-              onClick={() => {
-                setConfirmed(true);
-                handleFinalize('transcription-validation');
-              }}
-              disabled={!summary}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              {summary ? "Transcrição Aceita pelo Usuário e Paciente" : "Aguardando Resumo da IA..."}
-            </button>
           </div>
         </div>
       </div>
@@ -2724,6 +2974,45 @@ const LiveSessionView = ({
           </div>
         </div>
       </div>
+
+      {showFinalizeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+          >
+            <div className="p-6 text-center space-y-4">
+              <div className="size-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Finalizar Sessão?</h3>
+                <p className="text-slate-500 text-sm">
+                  Deseja realmente finalizar esta sessão de entrevista? Todos os dados capturados serão salvos no histórico.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 flex gap-3">
+              <button 
+                onClick={() => setShowFinalizeModal(false)}
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-100 transition-all"
+              >
+                Continuar Sessão
+              </button>
+              <button 
+                onClick={() => {
+                  setShowFinalizeModal(false);
+                  handleFinalize('transcription-validation');
+                }}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+              >
+                Sim, Finalizar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
@@ -3839,6 +4128,68 @@ export default function App() {
   const [summary, setSummary] = useState<string>('');
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
 
+  // Microphone & Device State
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [deviceError, setDeviceError] = useState<string | null>(null);
+
+  // Device Detection Logic
+  const getDevices = async (forcePrompt = false) => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setDeviceError("Seu navegador não suporta gravação de áudio ou você não está em um ambiente seguro (HTTPS).");
+        return;
+      }
+
+      // Check if we already have permission by looking at labels
+      const initialDevices = await navigator.mediaDevices.enumerateDevices();
+      const hasLabels = initialDevices.some(d => d.kind === 'audioinput' && d.label !== '');
+
+      // Only prompt if forced or if we have no devices at all
+      if (forcePrompt || (initialDevices.filter(d => d.kind === 'audioinput').length > 0 && !hasLabels && forcePrompt)) {
+        try {
+          setDeviceError(null); // Clear error before trying
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+        } catch (permErr: any) {
+          console.error("Permission error:", permErr);
+          if (permErr.name === 'NotFoundError' || permErr.name === 'DevicesNotFoundError') {
+            setDeviceError("Nenhum microfone foi encontrado. Por favor, conecte um dispositivo de áudio.");
+          } else if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+            setDeviceError("Permissão de microfone negada. O acesso está bloqueado nas configurações do seu navegador.");
+          } else {
+            setDeviceError(`Erro ao acessar microfone: ${permErr.message}`);
+          }
+          return;
+        }
+      }
+
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
+      const validDevices = audioInputs.filter(d => d.deviceId !== '');
+      setDevices(validDevices);
+      
+      if (validDevices.length > 0) {
+        setSelectedDeviceId(prev => {
+          if (prev && validDevices.some(d => d.deviceId === prev)) return prev;
+          return validDevices[0].deviceId;
+        });
+        if (hasLabels) setDeviceError(null);
+      } else if (forcePrompt) {
+        setDeviceError("Nenhum microfone detectado. Verifique a conexão do seu hardware.");
+      }
+    } catch (err: any) {
+      console.error("Error accessing media devices:", err);
+      if (forcePrompt) setDeviceError("Erro inesperado ao configurar dispositivos de áudio.");
+    }
+  };
+
+  useEffect(() => {
+    getDevices(false); // Don't force prompt on mount to avoid silent blocks
+    navigator.mediaDevices.addEventListener('devicechange', () => getDevices(false));
+    return () => navigator.mediaDevices.removeEventListener('devicechange', () => getDevices(false));
+  }, []);
+
   // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -3977,7 +4328,7 @@ export default function App() {
     );
   }
 
-  const RenderContent = () => {
+  const renderContent = () => {
     switch (view) {
       case 'landing': return <LandingPage setView={setView} />;
       case 'auth': return <AuthPage setView={setView} />;
@@ -4018,6 +4369,12 @@ export default function App() {
           setChecklistItems={setChecklistItems}
           scriptInstructions={scriptInstructions}
           patients={patientModels}
+          devices={devices}
+          selectedDeviceId={selectedDeviceId}
+          setSelectedDeviceId={setSelectedDeviceId}
+          deviceError={deviceError}
+          onRefreshDevices={() => getDevices(false)}
+          onRequestPermission={() => getDevices(true)}
         />
       );
       case 'live-session': return (
@@ -4036,6 +4393,10 @@ export default function App() {
           caseSummary={caseSummary}
           summary={summary}
           setCurrentHistoryId={setCurrentHistoryId}
+          devices={devices}
+          selectedDeviceId={selectedDeviceId}
+          setSelectedDeviceId={setSelectedDeviceId}
+          deviceError={deviceError}
         />
       );
       case 'transcription-validation': return (
@@ -4073,7 +4434,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       {isPublic ? (
-        <RenderContent />
+        renderContent()
       ) : (
         <div className="flex">
           <Sidebar currentView={view} setView={setView} user={user} role={userRole} />
@@ -4090,7 +4451,7 @@ export default function App() {
               view === 'doc-viewer' ? 'Visualizador de Documento' : ''
             } />
             <main className="flex-1 overflow-y-auto">
-              <RenderContent />
+              {renderContent()}
             </main>
           </div>
         </div>
