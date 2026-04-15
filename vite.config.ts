@@ -21,5 +21,8 @@ export default defineConfig(({mode}) => {
       strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true',
     },
+    build: {
+      outDir: 'dist',
+    },
   };
 });
