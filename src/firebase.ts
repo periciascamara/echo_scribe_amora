@@ -39,10 +39,26 @@ if (!firebaseConfig.apiKey) {
   console.warn("Firebase API Key is missing. Please check your environment variables.");
 }
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const googleProvider = new GoogleAuthProvider();
+let _auth: ReturnType<typeof getAuth> | null = null;
+let _db: ReturnType<typeof getFirestore> | null = null;
+let _googleProvider: GoogleAuthProvider | null = null;
+export let firebaseInitialized = false;
+
+try {
+  const app = initializeApp(firebaseConfig);
+  _auth = getAuth(app);
+  _db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  _googleProvider = new GoogleAuthProvider();
+  firebaseInitialized = true;
+} catch (e) {
+  console.error("Firebase initialization failed. The app will run without authentication.", e);
+}
+
+// auth, db, and googleProvider are only non-null when firebaseInitialized is true.
+// All callers must check firebaseInitialized before using these exports.
+export const auth = _auth!;
+export const db = _db!;
+export const googleProvider = _googleProvider!;
 
 // Error Handling
 export enum OperationType {
@@ -155,6 +171,7 @@ export const logout = () => signOut(auth);
 
 // Connection Test
 async function testConnection() {
+  if (!firebaseInitialized) return;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
