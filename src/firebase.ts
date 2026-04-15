@@ -35,18 +35,27 @@ const firebaseConfig = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || "(default)"
 };
 
-const requiredFirebaseEnv: Array<keyof typeof firebaseConfig> = [
+const requiredFirebaseEnv = [
   'apiKey',
   'authDomain',
   'projectId',
   'storageBucket',
   'messagingSenderId',
   'appId'
-];
+] as const;
+
+const firebaseEnvVarNameByKey: Record<(typeof requiredFirebaseEnv)[number], string> = {
+  apiKey: 'VITE_FIREBASE_API_KEY',
+  authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+  projectId: 'VITE_FIREBASE_PROJECT_ID',
+  storageBucket: 'VITE_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  appId: 'VITE_FIREBASE_APP_ID'
+};
 
 export const missingFirebaseEnvVars = requiredFirebaseEnv.filter((key) => !firebaseConfig[key]);
 export const missingFirebaseEnvNames = missingFirebaseEnvVars.map(
-  (key) => `VITE_FIREBASE_${key === 'apiKey' ? 'API_KEY' : key.replace(/[A-Z]/g, (m) => `_${m}`).toUpperCase()}`
+  (key) => firebaseEnvVarNameByKey[key]
 );
 export const isFirebaseConfigured = missingFirebaseEnvVars.length === 0;
 
