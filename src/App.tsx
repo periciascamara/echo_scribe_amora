@@ -76,7 +76,8 @@ import {
   loginWithEmail,
   logout, 
   handleFirestoreError, 
-  OperationType 
+  OperationType,
+  firebaseInitialized
 } from './firebase';
 import { 
   onAuthStateChanged, 
@@ -4185,13 +4186,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!navigator.mediaDevices) return;
     getDevices(false); // Don't force prompt on mount to avoid silent blocks
-    navigator.mediaDevices.addEventListener('devicechange', () => getDevices(false));
-    return () => navigator.mediaDevices.removeEventListener('devicechange', () => getDevices(false));
+    const handler = () => getDevices(false);
+    navigator.mediaDevices.addEventListener('devicechange', handler);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', handler);
   }, []);
 
   // Auth Listener
   useEffect(() => {
+    if (!firebaseInitialized) {
+      setIsAuthReady(true);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
