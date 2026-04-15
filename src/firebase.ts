@@ -35,14 +35,44 @@ const firebaseConfig = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || "(default)"
 };
 
-if (!firebaseConfig.apiKey) {
-  console.warn("Firebase API Key is missing. Please check your environment variables.");
+const requiredFirebaseEnv = [
+  'apiKey',
+  'authDomain',
+  'projectId',
+  'storageBucket',
+  'messagingSenderId',
+  'appId'
+] as const;
+
+const firebaseEnvVarNameByKey: Record<(typeof requiredFirebaseEnv)[number], string> = {
+  apiKey: 'VITE_FIREBASE_API_KEY',
+  authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+  projectId: 'VITE_FIREBASE_PROJECT_ID',
+  storageBucket: 'VITE_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  appId: 'VITE_FIREBASE_APP_ID'
+};
+
+export const missingFirebaseEnvVars = requiredFirebaseEnv.filter((key) => !firebaseConfig[key]);
+export const missingFirebaseEnvNames = missingFirebaseEnvVars.map(
+  (key) => firebaseEnvVarNameByKey[key]
+);
+export const isFirebaseConfigured = missingFirebaseEnvVars.length === 0;
+
+if (!isFirebaseConfigured) {
+  console.error(
+    `[Firebase] Missing required env vars: ${missingFirebaseEnvNames.join(', ')}`
+  );
 }
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const googleProvider = new GoogleAuthProvider();
+const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
+const authInstance = app ? getAuth(app) : null;
+const dbInstance = app ? getFirestore(app, firebaseConfig.firestoreDatabaseId) : null;
+const googleProviderInstance = app ? new GoogleAuthProvider() : null;
+
+export const auth = authInstance as ReturnType<typeof getAuth>;
+export const db = dbInstance as ReturnType<typeof getFirestore>;
+export const googleProvider = googleProviderInstance as GoogleAuthProvider;
 
 // Error Handling
 export enum OperationType {
@@ -77,12 +107,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
         email: provider.email,
@@ -98,6 +128,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Auth Helpers
 const syncUserDoc = async (user: User) => {
+  if (!isFirebaseConfigured) return;
   const userRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userRef);
   
@@ -119,8 +150,11 @@ const syncUserDoc = async (user: User) => {
 };
 
 export const signInWithGoogle = async () => {
+  if (!isFirebaseConfigured || !authInstance || !googleProviderInstance) {
+    throw new Error(`Firebase não configurado. Defina: ${missingFirebaseEnvNames.join(', ')}`);
+  }
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    const result = await signInWithPopup(authInstance, googleProviderInstance);
     await syncUserDoc(result.user);
     return result.user;
   } catch (error) {
@@ -130,8 +164,11 @@ export const signInWithGoogle = async () => {
 };
 
 export const loginWithEmail = async (email: string, pass: string) => {
+  if (!isFirebaseConfigured || !authInstance) {
+    throw new Error(`Firebase não configurado. Defina: ${missingFirebaseEnvNames.join(', ')}`);
+  }
   try {
-    const result = await signInWithEmailAndPassword(auth, email, pass);
+    const result = await signInWithEmailAndPassword(authInstance, email, pass);
     await syncUserDoc(result.user);
     return result.user;
   } catch (error: any) {
@@ -139,7 +176,7 @@ export const loginWithEmail = async (email: string, pass: string) => {
     if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
       if (email === 'admin@teste.com' || email === 'usuario@teste.com') {
         try {
-          const result = await createUserWithEmailAndPassword(auth, email, pass);
+          const result = await createUserWithEmailAndPassword(authInstance, email, pass);
           await syncUserDoc(result.user);
           return result.user;
         } catch (createError) {
@@ -151,7 +188,10 @@ export const loginWithEmail = async (email: string, pass: string) => {
   }
 };
 
-export const logout = () => signOut(auth);
+export const logout = () => {
+  if (!authInstance) return Promise.resolve();
+  return signOut(authInstance);
+};
 
 // Connection Test
 async function testConnection() {
@@ -163,4 +203,6 @@ async function testConnection() {
     }
   }
 }
-testConnection();
+if (isFirebaseConfigured) {
+  testConnection();
+}
