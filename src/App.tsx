@@ -137,6 +137,14 @@ type DocTemplate = {
   latexTemplate?: string;
 }
 
+const STRICT_CLINICAL_INSTRUCTIONS = `
+REGRAS CRÍTICAS DE FIDELIDADE:
+1. NÃO INVENTE NADA: Não acrescente informações que não foram explicitamente transcritas ou ditas pelo paciente.
+2. INFORMAÇÃO NÃO DISPONÍVEL: Se uma informação solicitada pelo roteiro ou modelo não estiver clara ou presente na transcrição, escreva "Informação não disponível" ou frase equivalente. Não tente deduzir ou criar conteúdo novo.
+3. SEM ACRÉSCIMOS CLÍNICOS: Evite acrescentar diagnósticos, termos técnicos ou informações médicas que não foram mencionados na entrevista ou na documentação anexada. Não use seu conhecimento prévio para preencher lacunas.
+4. FOCO NO ROTEIRO: Utilize estritamente o roteiro indicado e os pontos citados no comando.
+`;
+
 type HistoryItem = {
   id: string;
   patient: string;
@@ -3068,12 +3076,15 @@ const TranscriptionValidationView = ({
       const prompt = customSummaryPrompt.trim() 
         ? `Instrução Adicional do Usuário: ${customSummaryPrompt}\n\n` + 
           `Gere um resumo estruturado da entrevista médica abaixo, aplicando a transcrição ao contexto prévio e ao roteiro de entrevista selecionado.\n\n` +
+          `${STRICT_CLINICAL_INSTRUCTIONS}\n\n` +
           `Contexto Prévio do Paciente: ${caseSummary}\n` +
           `Roteiro de Entrevista (Objetivos e Checklist): ${scriptInstructions}\n\n` +
           `Transcrição da Sessão:\n${transcriptions.map(t => t.text).join('\n')}\n\n` +
           `O resumo deve ser profissional, conciso e focado nos pontos clínicos relevantes. Demonstre claramente como as informações da transcrição validam ou complementam o contexto prévio e como os pontos do roteiro foram abordados.`
         : `Gere um resumo estruturado da entrevista médica abaixo, aplicando a transcrição ao contexto prévio e ao roteiro de entrevista selecionado.
             
+            ${STRICT_CLINICAL_INSTRUCTIONS}
+
             Contexto Prévio do Paciente: ${caseSummary}
             Roteiro de Entrevista (Objetivos e Checklist): ${scriptInstructions}
             
@@ -3464,6 +3475,8 @@ const DocViewerView = ({
         Você é um assistente médico especializado em documentação clínica.
         Gere o conteúdo para um documento médico baseado nos seguintes dados:
         
+        ${STRICT_CLINICAL_INSTRUCTIONS}
+
         PACIENTE: ${selectedPatient?.name || patientName} (${selectedPatient?.age || 'N/A'}, ${selectedPatient?.gender || 'N/A'})
         CONTEXTO: ${caseSummary}
         ROTEIRO DE ENTREVISTA: ${scriptInstructions}
